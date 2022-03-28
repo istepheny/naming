@@ -12,7 +12,8 @@ import (
 )
 
 type Naming struct {
-	once      sync.Once
+	mu        sync.RWMutex
+	watched   map[string]struct{}
 	registry  registry.Registry
 	balancer  balancer.Balancer
 	container *container.Container
@@ -20,6 +21,7 @@ type Naming struct {
 
 func New(config config.Config) *Naming {
 	return &Naming{
+		watched:   make(map[string]struct{}),
 		registry:  registry.Get(config.Driver, config),
 		balancer:  balancer.Get(random.Driver),
 		container: container.New(),
@@ -35,9 +37,9 @@ func (n *Naming) Deregister(app *app.App) (err error) {
 }
 
 func (n *Naming) Discover(appName string) (a *app.App, err error) {
-	n.once.Do(func() {
-		go n.watch()
-	})
+	if n.isWatched(appName) == false {
+		go n.watch(appName)
+	}
 
 	var apps []*app.App
 	apps = n.container.Get(appName)
@@ -54,8 +56,12 @@ func (n *Naming) Discover(appName string) (a *app.App, err error) {
 	return n.balancer.Pick(apps)
 }
 
-func (n *Naming) watch() {
-	watchChan, err := n.registry.Watch()
+func (n *Naming) watch(appName string) {
+	n.mu.Lock()
+	n.watched[appName] = struct{}{}
+	n.mu.Unlock()
+
+	watchChan, err := n.registry.Watch(appName)
 	if err != nil {
 		return
 	}
@@ -71,4 +77,11 @@ func (n *Naming) watch() {
 			}
 		}
 	}
+}
+
+func (n *Naming) isWatched(appName string) bool {
+	n.mu.RLock()
+	_, ok := n.watched[appName]
+	n.mu.RUnlock()
+	return ok
 }

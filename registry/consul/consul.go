@@ -1,8 +1,6 @@
 package git
 
 import (
-	"sync"
-
 	"git.ucloudadmin.com/monkey/naming/app"
 	"git.ucloudadmin.com/monkey/naming/config"
 	"git.ucloudadmin.com/monkey/naming/registry"
@@ -18,9 +16,7 @@ func init() {
 }
 
 type Consul struct {
-	mu        sync.RWMutex
 	client    *api.Client
-	watchers  map[string]struct{}
 	watchChan chan map[string][]*app.App
 }
 
@@ -39,7 +35,6 @@ func NewConsul(c config.Config) registry.Registry {
 
 	return &Consul{
 		client:    client,
-		watchers:  make(map[string]struct{}),
 		watchChan: make(chan map[string][]*app.App),
 	}
 }
@@ -85,44 +80,16 @@ func (c *Consul) Discover(appName string) (apps []*app.App, err error) {
 	return apps, nil
 }
 
-func (c *Consul) Watch() (watchChan chan map[string][]*app.App, err error) {
-	params := map[string]interface{}{"type": "services"}
+func (c *Consul) Watch(appName string) (watchChan chan map[string][]*app.App, err error) {
+	params := map[string]interface{}{"type": "service", "service": appName}
 	plan, err := watch.Parse(params)
 	if err != nil {
 		return nil, err
 	}
 
-	plan.Handler = c.servicesHandler
+	plan.Handler = c.serviceHandler
 	go plan.RunWithClientAndHclog(c.client, nil)
 	return c.watchChan, nil
-}
-
-func (c *Consul) servicesHandler(_ uint64, result interface{}) {
-	services, ok := result.(map[string][]string)
-	if !ok {
-		return
-	}
-
-	for service := range services {
-		c.mu.RLock()
-		if _, ok := c.watchers[service]; ok {
-			continue
-		}
-		c.mu.RUnlock()
-
-		params := map[string]interface{}{"type": "service", "service": service}
-		plan, err := watch.Parse(params)
-		if err != nil {
-			continue
-		}
-
-		plan.Handler = c.serviceHandler
-		go plan.RunWithClientAndHclog(c.client, nil)
-
-		c.mu.Lock()
-		c.watchers[service] = struct{}{}
-		c.mu.Unlock()
-	}
 }
 
 func (c *Consul) serviceHandler(_ uint64, result interface{}) {

@@ -19,14 +19,6 @@ func main() {
 
 	n := naming.New(c)
 
-	app, err := n.Discover("user")
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	fmt.Println(app.String())
-
 	http.HandleFunc("/discover", func(writer http.ResponseWriter, request *http.Request) {
 		app, err := n.Discover("user")
 		if err != nil {
@@ -34,11 +26,11 @@ func main() {
 			return
 		}
 
-		fmt.Println(app.Address)
-		writer.Write([]byte(app.Address))
+		fmt.Println(app.String())
+		writer.Write([]byte(app.String()))
 	})
 
-	err = http.ListenAndServe(":80", nil)
+	err := http.ListenAndServe(":80", nil)
 	if err != nil {
 		log.Println(err)
 		return

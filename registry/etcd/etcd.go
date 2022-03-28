@@ -33,7 +33,7 @@ func (e *Etcd) Discover(appName string) (apps []*app.App, err error) {
 	panic("implement me")
 }
 
-func (e *Etcd) Watch() (watchChan chan map[string][]*app.App, err error) {
+func (e *Etcd) Watch(appName string) (watchChan chan map[string][]*app.App, err error) {
 	//TODO implement me
 	panic("implement me")
 }
