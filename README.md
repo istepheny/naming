@@ -42,6 +42,12 @@ func main() {
 	myApp, err := n.Discover("my-app")
 	fmt.Println(myApp.Address, err) // 127.0.0.1:80
 
+	// 获取服务的所有节点
+	myApps, err := n.DiscoverAll("my-app")
+	for _, myApp := range myApps {
+		fmt.Println(myApp.Address, err)
+	}
+
 	// 服务注销
 	n.Deregister(app.New("my-app", "127.0.0.1", 80))
 }

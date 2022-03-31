@@ -41,10 +41,18 @@ func (n *Naming) Discover(appName string) (a *app.App, err error) {
 		go n.watch(appName)
 	}
 
-	var apps []*app.App
+	apps, err := n.DiscoverAll(appName)
+	if err != nil {
+		return nil, err
+	}
+
+	return n.balancer.Pick(apps)
+}
+
+func (n *Naming) DiscoverAll(appName string) (apps []*app.App, err error) {
 	apps = n.container.Get(appName)
 	if len(apps) > 0 {
-		return n.balancer.Pick(apps)
+		return apps, nil
 	}
 
 	apps, err = n.registry.Discover(appName)
@@ -53,7 +61,8 @@ func (n *Naming) Discover(appName string) (a *app.App, err error) {
 	}
 
 	n.container.Set(appName, apps)
-	return n.balancer.Pick(apps)
+
+	return apps, nil
 }
 
 func (n *Naming) watch(appName string) {
