@@ -2,6 +2,7 @@ package naming
 
 import (
 	"sync"
+	"time"
 
 	"git.ucloudadmin.com/monkey/naming/app"
 	"git.ucloudadmin.com/monkey/naming/balancer"
@@ -37,10 +38,6 @@ func (n *Naming) Deregister(app *app.App) (err error) {
 }
 
 func (n *Naming) Discover(appName string) (a *app.App, err error) {
-	if n.isWatched(appName) == false {
-		go n.watch(appName)
-	}
-
 	apps, err := n.DiscoverAll(appName)
 	if err != nil {
 		return nil, err
@@ -50,26 +47,29 @@ func (n *Naming) Discover(appName string) (a *app.App, err error) {
 }
 
 func (n *Naming) DiscoverAll(appName string) (apps []*app.App, err error) {
+	if n.isWatched(appName) == false {
+		n.mu.Lock()
+		n.watched[appName] = struct{}{}
+		n.mu.Unlock()
+
+		go n.watch(appName)
+		go n.sync(appName)
+	}
+
 	apps = n.container.Get(appName)
 	if len(apps) > 0 {
 		return apps, nil
 	}
 
-	apps, err = n.registry.Discover(appName)
+	apps, err = n.syncContainer(appName)
 	if err != nil {
 		return nil, err
 	}
-
-	n.container.Set(appName, apps)
 
 	return apps, nil
 }
 
 func (n *Naming) watch(appName string) {
-	n.mu.Lock()
-	n.watched[appName] = struct{}{}
-	n.mu.Unlock()
-
 	watchChan, err := n.registry.Watch(appName)
 	if err != nil {
 		return
@@ -86,6 +86,28 @@ func (n *Naming) watch(appName string) {
 			}
 		}
 	}
+}
+
+func (n *Naming) sync(appName string) {
+	t := time.NewTicker(60 * time.Second)
+
+	for {
+		select {
+		case <-t.C:
+			_, _ = n.syncContainer(appName)
+		}
+	}
+}
+
+func (n *Naming) syncContainer(appName string) (apps []*app.App, err error) {
+	apps, err = n.registry.Discover(appName)
+	if err != nil {
+		return nil, err
+	}
+
+	n.container.Set(appName, apps)
+
+	return apps, nil
 }
 
 func (n *Naming) isWatched(appName string) bool {
