@@ -33,7 +33,7 @@ func (z *Zookeeper) Discover(appName string) (apps []*app.App, err error) {
 	panic("implement me")
 }
 
-func (z *Zookeeper) Watch(appName string) (watchChan chan map[string][]*app.App, err error) {
+func (z *Zookeeper) Watch(appName string) (watchChan chan *registry.WatchResponse, err error) {
 	//TODO implement me
 	panic("implement me")
 }
