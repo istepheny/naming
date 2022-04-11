@@ -58,7 +58,14 @@ func (c *Consul) Register(app *app.App) (err error) {
 }
 
 func (c *Consul) Deregister(app *app.App) (err error) {
-	return c.client.Agent().ServiceDeregister(app.ID)
+	err = c.client.Agent().ServiceDeregister(app.ID)
+
+	e := err.(api.StatusError)
+	if e.Code == 404 {
+		return nil
+	}
+
+	return e
 }
 
 func (c *Consul) Discover(appName string) (apps []*app.App, err error) {

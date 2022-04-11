@@ -109,8 +109,7 @@ func (e *Etcd) Deregister(app *app.App) (err error) {
 	}
 
 	if len(response.Kvs) == 0 {
-		err = fmt.Errorf("app not register")
-		return
+		return nil
 	}
 
 	leaseID := response.Kvs[0].Lease
