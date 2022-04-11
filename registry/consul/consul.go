@@ -17,7 +17,7 @@ func init() {
 
 type Consul struct {
 	client    *api.Client
-	watchChan chan map[string][]*app.App
+	watchChan chan *registry.WatchResponse
 }
 
 func NewConsul(c config.Config) registry.Registry {
@@ -35,7 +35,7 @@ func NewConsul(c config.Config) registry.Registry {
 
 	return &Consul{
 		client:    client,
-		watchChan: make(chan map[string][]*app.App),
+		watchChan: make(chan *registry.WatchResponse),
 	}
 }
 
@@ -80,7 +80,7 @@ func (c *Consul) Discover(appName string) (apps []*app.App, err error) {
 	return apps, nil
 }
 
-func (c *Consul) Watch(appName string) (watchChan chan map[string][]*app.App, err error) {
+func (c *Consul) Watch(appName string) (watchChan chan *registry.WatchResponse, err error) {
 	params := map[string]interface{}{"type": "service", "service": appName}
 	plan, err := watch.Parse(params)
 	if err != nil {
@@ -98,7 +98,7 @@ func (c *Consul) serviceHandler(_ uint64, result interface{}) {
 		return
 	}
 
-	appsMap := make(map[string][]*app.App)
+	apps := []*app.App{}
 	for _, s := range serviceEntries {
 		if s.Checks.AggregatedStatus() != api.HealthPassing {
 			continue
@@ -111,11 +111,12 @@ func (c *Consul) serviceHandler(_ uint64, result interface{}) {
 			s.Service.Meta,
 		)
 
-		if _, ok := appsMap[s.Service.Service]; !ok {
-			appsMap[s.Service.Service] = make([]*app.App, 0)
-		}
-		appsMap[s.Service.Service] = append(appsMap[s.Service.Service], a)
+		apps = append(apps, a)
 	}
 
-	c.watchChan <- appsMap
+	c.watchChan <- &registry.WatchResponse{
+		Apps:     apps,
+		Canceled: false,
+		Error:    nil,
+	}
 }

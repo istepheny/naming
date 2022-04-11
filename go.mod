@@ -4,6 +4,7 @@ go 1.17
 
 require (
 	github.com/hashicorp/consul/api v1.12.0
+	github.com/jpillora/backoff v1.0.0
 	go.etcd.io/etcd/api/v3 v3.5.2
 	go.etcd.io/etcd/client/v3 v3.5.2
 )

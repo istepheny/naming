@@ -24,9 +24,12 @@ func init() {
 }
 
 type Etcd struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+
 	client    *clientv3.Client
 	lease     clientv3.Lease
-	watchChan chan map[string][]*app.App
+	watchChan chan *registry.WatchResponse
 }
 
 func NewEtcd(c config.Config) registry.Registry {
@@ -43,10 +46,14 @@ func NewEtcd(c config.Config) registry.Registry {
 		panic(err)
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+
 	return &Etcd{
+		ctx:       ctx,
+		cancel:    cancel,
 		client:    client,
 		lease:     clientv3.NewLease(client),
-		watchChan: make(chan map[string][]*app.App),
+		watchChan: make(chan *registry.WatchResponse),
 	}
 }
 
@@ -62,7 +69,6 @@ func (e *Etcd) newAppsMemSnapshot(appName string) (ams *AppsMemSnapshot, err err
 	}
 
 	ams = &AppsMemSnapshot{
-		appName:   appName,
 		container: container,
 	}
 
@@ -70,14 +76,14 @@ func (e *Etcd) newAppsMemSnapshot(appName string) (ams *AppsMemSnapshot, err err
 }
 
 func (e *Etcd) Register(app *app.App) (err error) {
-	grantResp, err := e.lease.Grant(context.TODO(), 10)
+	grantResp, err := e.lease.Grant(e.ctx, 10)
 
-	_, err = e.client.Put(context.TODO(), e.appRegisterKey(app), app.String(), clientv3.WithLease(grantResp.ID))
+	_, err = e.client.Put(e.ctx, e.appRegisterKey(app), app.String(), clientv3.WithLease(grantResp.ID))
 	if err != nil {
 		return
 	}
 
-	kaChan, err := e.lease.KeepAlive(context.TODO(), grantResp.ID)
+	kaChan, err := e.lease.KeepAlive(e.ctx, grantResp.ID)
 	if err != nil {
 		return
 	}
@@ -97,7 +103,7 @@ func (e *Etcd) Register(app *app.App) (err error) {
 }
 
 func (e *Etcd) Deregister(app *app.App) (err error) {
-	response, err := e.client.Get(context.TODO(), e.appRegisterKey(app))
+	response, err := e.client.Get(e.ctx, e.appRegisterKey(app))
 	if err != nil {
 		return
 	}
@@ -108,12 +114,12 @@ func (e *Etcd) Deregister(app *app.App) (err error) {
 	}
 
 	leaseID := response.Kvs[0].Lease
-	_, err = e.lease.Revoke(context.TODO(), clientv3.LeaseID(leaseID))
+	_, err = e.lease.Revoke(e.ctx, clientv3.LeaseID(leaseID))
 	if err != nil {
 		return
 	}
 
-	_, err = e.client.Delete(context.TODO(), e.appRegisterKey(app))
+	_, err = e.client.Delete(e.ctx, e.appRegisterKey(app))
 	if err != nil {
 		return
 	}
@@ -125,58 +131,52 @@ func (e *Etcd) Discover(appName string) (apps []*app.App, err error) {
 	return e.fetchApps(appName)
 }
 
-func (e *Etcd) Watch(appName string) (watchChan chan map[string][]*app.App, err error) {
+func (e *Etcd) Watch(appName string) (watchChan chan *registry.WatchResponse, err error) {
 	go func(appName string) {
-		for i := 0; i < 5; i++ {
-			canceled := e.watch(appName)
-			if !canceled {
-				break
+		ams, err := e.newAppsMemSnapshot(appName)
+		if err != nil {
+			watchResponse := &registry.WatchResponse{
+				Canceled: true,
+				Error:    err,
 			}
-			time.Sleep(30 * time.Second)
+			e.watchChan <- watchResponse
+			return
+		}
+
+		watchChan := e.client.Watch(e.ctx, e.appRegisterPrefix(appName), clientv3.WithPrefix(), clientv3.WithPrevKV(), clientv3.WithProgressNotify())
+
+		for {
+			select {
+			case watchRes := <-watchChan:
+				if watchRes.Canceled == true {
+					watchResponse := &registry.WatchResponse{
+						Canceled: true,
+						Error:    watchRes.Err(),
+					}
+					e.watchChan <- watchResponse
+					return
+				}
+
+				if watchRes.Err() != nil {
+					watchResponse := &registry.WatchResponse{
+						Canceled: false,
+						Error:    watchRes.Err(),
+					}
+					e.watchChan <- watchResponse
+					continue
+				}
+
+				e.handleEvents(watchRes.Events, ams)
+				watchResponse := &registry.WatchResponse{
+					Apps: ams.AppsList(),
+				}
+
+				e.watchChan <- watchResponse
+			}
 		}
 	}(appName)
 
 	return e.watchChan, nil
-}
-
-func (e *Etcd) watch(appName string) bool {
-	ams, err := e.newAppsMemSnapshot(appName)
-	if err != nil {
-		return true
-	}
-
-	ticker := time.NewTicker(time.Duration(5) * time.Second)
-	watchChan := e.client.Watch(context.TODO(), e.appRegisterPrefix(appName), clientv3.WithPrefix(), clientv3.WithPrevKV(), clientv3.WithProgressNotify())
-
-	var events []*clientv3.Event
-
-	for {
-		select {
-		case watchRes := <-watchChan:
-			if watchRes.Canceled == true {
-				return true
-			}
-
-			if watchRes.Err() != nil {
-				continue
-			}
-
-			events = append(events, watchRes.Events...)
-
-			if len(events) >= 100 {
-				ticker.Stop()
-				e.handleEvents(events, ams)
-				events = make([]*clientv3.Event, 0)
-				ticker = time.NewTicker(time.Duration(5) * time.Second)
-			}
-
-		case <-ticker.C:
-			if len(events) > 0 {
-				e.handleEvents(events, ams)
-				events = make([]*clientv3.Event, 0)
-			}
-		}
-	}
 }
 
 func (e *Etcd) handleEvents(events []*clientv3.Event, ams *AppsMemSnapshot) {
@@ -201,15 +201,10 @@ func (e *Etcd) handleEvents(events []*clientv3.Event, ams *AppsMemSnapshot) {
 			ams.Delete(app)
 		}
 	}
-
-	appsMap := make(map[string][]*app.App)
-	appsMap[ams.AppName()] = ams.AppsList()
-
-	e.watchChan <- appsMap
 }
 
 func (e *Etcd) fetchApps(appName string) (apps []*app.App, err error) {
-	response, err := e.client.Get(context.TODO(), e.appRegisterPrefix(appName), clientv3.WithPrefix())
+	response, err := e.client.Get(e.ctx, e.appRegisterPrefix(appName), clientv3.WithPrefix())
 	if err != nil {
 		return
 	}
@@ -233,11 +228,10 @@ func (e *Etcd) appRegisterKey(app *app.App) string {
 }
 
 func (e *Etcd) appRegisterPrefix(appName string) string {
-	return fmt.Sprintf("%s/%s", prefix, appName)
+	return fmt.Sprintf("%s/%s/", prefix, appName)
 }
 
 type AppsMemSnapshot struct {
-	appName   string
 	container map[string]*app.App
 }
 
@@ -247,10 +241,6 @@ func (ams *AppsMemSnapshot) Put(app *app.App) {
 
 func (ams *AppsMemSnapshot) Delete(app *app.App) {
 	delete(ams.container, app.Address)
-}
-
-func (ams *AppsMemSnapshot) AppName() string {
-	return ams.appName
 }
 
 func (ams *AppsMemSnapshot) AppsList() (apps []*app.App) {

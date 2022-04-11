@@ -1,6 +1,9 @@
 package naming
 
 import (
+	"errors"
+	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -10,6 +13,7 @@ import (
 	"git.ucloudadmin.com/monkey/naming/config"
 	"git.ucloudadmin.com/monkey/naming/container"
 	"git.ucloudadmin.com/monkey/naming/registry"
+	"github.com/jpillora/backoff"
 )
 
 type Naming struct {
@@ -70,20 +74,42 @@ func (n *Naming) DiscoverAll(appName string) (apps []*app.App, err error) {
 }
 
 func (n *Naming) watch(appName string) {
+	b := &backoff.Backoff{}
+
+	for {
+		err := n.watchLoop(appName)
+		if err != nil {
+			d := b.Duration()
+			time.Sleep(d)
+			continue
+		}
+		b.Reset()
+	}
+}
+
+func (n *Naming) watchLoop(appName string) error {
 	watchChan, err := n.registry.Watch(appName)
 	if err != nil {
-		return
+		return err
 	}
 
 	for {
 		select {
-		case appsMap, ok := <-watchChan:
+		case watchResponse, ok := <-watchChan:
 			if !ok {
+				return errors.New("naming: watch chan closed")
+			}
+
+			if watchResponse.Canceled == true {
+				return fmt.Errorf("naming: watch chan closed, %e", watchResponse.Error)
+			}
+
+			if watchResponse.Error != nil {
+				log.Printf("naming: watch response error: %e", err)
 				continue
 			}
-			for appName, apps := range appsMap {
-				n.container.Set(appName, apps)
-			}
+
+			n.container.Set(appName, watchResponse.Apps)
 		}
 	}
 }
