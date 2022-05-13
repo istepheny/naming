@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"go.etcd.io/etcd/api/v3/mvccpb"
@@ -30,6 +31,9 @@ type Etcd struct {
 	client    *clientv3.Client
 	lease     clientv3.Lease
 	watchChan chan *registry.WatchResponse
+
+	mu           sync.RWMutex
+	registerApps map[string]struct{}
 }
 
 func NewEtcd(c config.Config) registry.Registry {
@@ -49,11 +53,12 @@ func NewEtcd(c config.Config) registry.Registry {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &Etcd{
-		ctx:       ctx,
-		cancel:    cancel,
-		client:    client,
-		lease:     clientv3.NewLease(client),
-		watchChan: make(chan *registry.WatchResponse),
+		ctx:          ctx,
+		cancel:       cancel,
+		client:       client,
+		lease:        clientv3.NewLease(client),
+		watchChan:    make(chan *registry.WatchResponse),
+		registerApps: make(map[string]struct{}),
 	}
 }
 
@@ -75,8 +80,13 @@ func (e *Etcd) newAppsMemSnapshot(appName string) (ams *AppsMemSnapshot, err err
 	return
 }
 
-func (e *Etcd) Register(app *app.App) (err error) {
+func (e *Etcd) Register(app *app.App) (notifyChan chan *registry.NotifyMessage, err error) {
+	notifyChan = make(chan *registry.NotifyMessage, 1)
+
 	grantResp, err := e.lease.Grant(e.ctx, 10)
+	if err != nil {
+		return
+	}
 
 	_, err = e.client.Put(e.ctx, e.appRegisterKey(app), app.String(), clientv3.WithLease(grantResp.ID))
 	if err != nil {
@@ -88,18 +98,40 @@ func (e *Etcd) Register(app *app.App) (err error) {
 		return
 	}
 
-	go func() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	e.registerApps[app.ID] = struct{}{}
+
+	go func(app string) {
 		for {
 			select {
 			case _, ok := <-kaChan:
 				if !ok {
+					e.mu.RLock()
+					defer e.mu.RUnlock()
+
+					if _, ok := e.registerApps[app]; !ok {
+						notifyChan <- &registry.NotifyMessage{
+							Stopped:    true,
+							StopReason: registry.AppDeregister,
+						}
+					} else {
+						notifyChan <- &registry.NotifyMessage{
+							Stopped:    true,
+							StopReason: registry.KeepAliveError,
+						}
+					}
+
+					close(notifyChan)
+
 					return
 				}
 			}
 		}
-	}()
+	}(app.ID)
 
-	return nil
+	return
 }
 
 func (e *Etcd) Deregister(app *app.App) (err error) {
@@ -113,15 +145,21 @@ func (e *Etcd) Deregister(app *app.App) (err error) {
 	}
 
 	leaseID := response.Kvs[0].Lease
-	_, err = e.lease.Revoke(e.ctx, clientv3.LeaseID(leaseID))
-	if err != nil {
-		return
-	}
 
 	_, err = e.client.Delete(e.ctx, e.appRegisterKey(app))
 	if err != nil {
 		return
 	}
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	_, err = e.lease.Revoke(e.ctx, clientv3.LeaseID(leaseID))
+	if err != nil {
+		return
+	}
+
+	delete(e.registerApps, app.ID)
 
 	return nil
 }

@@ -16,6 +16,8 @@ import (
 	"github.com/jpillora/backoff"
 )
 
+const ErrMaxRetry = 3
+
 type Naming struct {
 	mu        sync.RWMutex
 	watched   map[string]struct{}
@@ -33,11 +35,11 @@ func New(config config.Config) *Naming {
 	}
 }
 
-func (n *Naming) Register(app *app.App) {
+func (n *Naming) Register(app *app.App) (notifyChan chan *registry.NotifyMessage, err error) {
 	b := &backoff.Backoff{}
 
-	for {
-		err := n.registry.Register(app)
+	for i := 0; i < ErrMaxRetry; i++ {
+		notifyChan, err = n.registry.Register(app)
 		if err != nil {
 			log.Printf("naming: Register error: %v, app: %v", err, app.String())
 			d := b.Duration()
@@ -47,13 +49,16 @@ func (n *Naming) Register(app *app.App) {
 		b.Reset()
 		return
 	}
+
+	b.Reset()
+	return
 }
 
-func (n *Naming) Deregister(app *app.App) {
+func (n *Naming) Deregister(app *app.App) (err error) {
 	b := &backoff.Backoff{}
 
-	for {
-		err := n.registry.Deregister(app)
+	for i := 0; i < ErrMaxRetry; i++ {
+		err = n.registry.Deregister(app)
 		if err != nil {
 			d := b.Duration()
 			log.Printf("naming: Deregister error: %v, app: %v", err, app.String())
@@ -63,6 +68,9 @@ func (n *Naming) Deregister(app *app.App) {
 		b.Reset()
 		return
 	}
+
+	b.Reset()
+	return
 }
 
 func (n *Naming) Discover(appName string) (a *app.App, err error) {

@@ -39,7 +39,9 @@ func NewConsul(c config.Config) registry.Registry {
 	}
 }
 
-func (c *Consul) Register(app *app.App) (err error) {
+func (c *Consul) Register(app *app.App) (notifyChan chan *registry.NotifyMessage, err error) {
+	notifyChan = make(chan *registry.NotifyMessage, 1)
+
 	r := &api.AgentServiceRegistration{
 		ID:      app.ID,
 		Name:    app.Name,
@@ -54,7 +56,7 @@ func (c *Consul) Register(app *app.App) (err error) {
 		},
 	}
 
-	return c.client.Agent().ServiceRegister(r)
+	return notifyChan, c.client.Agent().ServiceRegister(r)
 }
 
 func (c *Consul) Deregister(app *app.App) (err error) {

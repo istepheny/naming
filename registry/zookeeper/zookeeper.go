@@ -18,7 +18,7 @@ func NewZookeeper(c config.Config) registry.Registry {
 	return &Zookeeper{}
 }
 
-func (z *Zookeeper) Register(app *app.App) (err error) {
+func (z *Zookeeper) Register(app *app.App) (notifyChan chan *registry.NotifyMessage, err error) {
 	//TODO implement me
 	panic("implement me")
 }
