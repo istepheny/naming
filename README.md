@@ -3,7 +3,7 @@
 ## 安装
 
  ```shell
- go get git.ucloudadmin.com/monkey/naming@latest
+ go get github.com/istepheny/naming@latest
  ```
 
 ## 使用
@@ -14,9 +14,9 @@ package main
 import (
 	"fmt"
 
-	"git.ucloudadmin.com/monkey/naming"
-	"git.ucloudadmin.com/monkey/naming/app"
-	"git.ucloudadmin.com/monkey/naming/config"
+	"github.com/istepheny/naming"
+	"github.com/istepheny/naming/app"
+	"github.com/istepheny/naming/config"
 )
 
 func main() {

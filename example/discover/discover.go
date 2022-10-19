@@ -5,8 +5,8 @@ import (
 	"log"
 	"net/http"
 
-	"git.ucloudadmin.com/monkey/naming"
-	"git.ucloudadmin.com/monkey/naming/config"
+	"github.com/istepheny/naming"
+	"github.com/istepheny/naming/config"
 )
 
 func main() {

@@ -1,9 +1,9 @@
 package git
 
 import (
-	"git.ucloudadmin.com/monkey/naming/app"
-	"git.ucloudadmin.com/monkey/naming/config"
-	"git.ucloudadmin.com/monkey/naming/registry"
+	"github.com/istepheny/naming/app"
+	"github.com/istepheny/naming/config"
+	"github.com/istepheny/naming/registry"
 
 	"github.com/hashicorp/consul/api"
 	"github.com/hashicorp/consul/api/watch"

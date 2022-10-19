@@ -1,9 +1,9 @@
 package zookeeper
 
 import (
-	"git.ucloudadmin.com/monkey/naming/app"
-	"git.ucloudadmin.com/monkey/naming/config"
-	"git.ucloudadmin.com/monkey/naming/registry"
+	"github.com/istepheny/naming/app"
+	"github.com/istepheny/naming/config"
+	"github.com/istepheny/naming/registry"
 )
 
 const Driver = "zookeeper"

@@ -10,9 +10,9 @@ import (
 	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
 
-	"git.ucloudadmin.com/monkey/naming/app"
-	"git.ucloudadmin.com/monkey/naming/config"
-	"git.ucloudadmin.com/monkey/naming/registry"
+	"github.com/istepheny/naming/app"
+	"github.com/istepheny/naming/config"
+	"github.com/istepheny/naming/registry"
 )
 
 const (

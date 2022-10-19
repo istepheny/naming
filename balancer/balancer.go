@@ -1,7 +1,7 @@
 package balancer
 
 import (
-	"git.ucloudadmin.com/monkey/naming/app"
+	"github.com/istepheny/naming/app"
 )
 
 type Balancer interface {

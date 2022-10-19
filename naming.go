@@ -7,12 +7,12 @@ import (
 	"sync"
 	"time"
 
-	"git.ucloudadmin.com/monkey/naming/app"
-	"git.ucloudadmin.com/monkey/naming/balancer"
-	"git.ucloudadmin.com/monkey/naming/balancer/random"
-	"git.ucloudadmin.com/monkey/naming/config"
-	"git.ucloudadmin.com/monkey/naming/container"
-	"git.ucloudadmin.com/monkey/naming/registry"
+	"github.com/istepheny/naming/app"
+	"github.com/istepheny/naming/balancer"
+	"github.com/istepheny/naming/balancer/random"
+	"github.com/istepheny/naming/config"
+	"github.com/istepheny/naming/container"
+	"github.com/istepheny/naming/registry"
 	"github.com/jpillora/backoff"
 )
 

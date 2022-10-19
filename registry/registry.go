@@ -1,6 +1,6 @@
 package registry
 
-import "git.ucloudadmin.com/monkey/naming/app"
+import "github.com/istepheny/naming/app"
 
 type Reason string
 

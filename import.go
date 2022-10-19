@@ -1,7 +1,7 @@
 package naming
 
 import (
-	_ "git.ucloudadmin.com/monkey/naming/registry/consul"
-	_ "git.ucloudadmin.com/monkey/naming/registry/etcd"
-	_ "git.ucloudadmin.com/monkey/naming/registry/zookeeper"
+	_ "github.com/istepheny/naming/registry/consul"
+	_ "github.com/istepheny/naming/registry/etcd"
+	_ "github.com/istepheny/naming/registry/zookeeper"
 )

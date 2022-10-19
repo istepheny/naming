@@ -1,4 +1,4 @@
-module git.ucloudadmin.com/monkey/naming
+module github.com/istepheny/naming
 
 go 1.17
 

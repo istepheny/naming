@@ -3,7 +3,7 @@ package registry
 import (
 	"sync"
 
-	"git.ucloudadmin.com/monkey/naming/config"
+	"github.com/istepheny/naming/config"
 )
 
 type factory func(config config.Config) Registry

@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"git.ucloudadmin.com/monkey/naming/app"
-	"git.ucloudadmin.com/monkey/naming/balancer"
+	"github.com/istepheny/naming/app"
+	"github.com/istepheny/naming/balancer"
 )
 
 var (
